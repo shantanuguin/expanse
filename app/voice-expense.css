@@ -1,0 +1,250 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   VOICE-FIRST EXPENSE ENTRY — Stylesheet
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ── Mic Orb ── */
+.voice-orb-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 2rem 1rem;
+}
+
+.voice-orb {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: linear-gradient(135deg, #F54142 0%, #ff6b6b 100%);
+    color: white;
+    border: none;
+    outline: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    z-index: 1;
+}
+
+.voice-orb:hover {
+    transform: scale(1.05);
+}
+
+.voice-orb:active {
+    transform: scale(0.95);
+}
+
+.voice-orb.listening {
+    animation: orb-breathe 2s ease-in-out infinite;
+}
+
+/* Pulse rings behind the orb when listening */
+.voice-orb::before,
+.voice-orb::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 2px solid rgba(245, 65, 66, 0.3);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.voice-orb.listening::before {
+    animation: pulse-ring 2s ease-out infinite;
+}
+
+.voice-orb.listening::after {
+    animation: pulse-ring 2s ease-out infinite 0.5s;
+}
+
+@keyframes orb-breathe {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(245, 65, 66, 0.3); }
+    50%      { transform: scale(1.08); box-shadow: 0 0 60px rgba(245, 65, 66, 0.5); }
+}
+
+@keyframes pulse-ring {
+    0%   { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(1.8); opacity: 0; }
+}
+
+/* ── Streaming transcript ── */
+.voice-transcript-area {
+    min-height: 60px;
+    max-height: 120px;
+    overflow-y: auto;
+    text-align: center;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.voice-transcript-final {
+    font-size: 1.1rem;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.voice-transcript-interim {
+    font-size: 1.1rem;
+    font-weight: 400;
+    opacity: 0.5;
+    font-style: italic;
+}
+
+.voice-hint {
+    font-size: 0.8rem;
+    opacity: 0.5;
+    text-align: center;
+    max-width: 300px;
+}
+
+/* ── Summary Card ── */
+.summary-card {
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+}
+
+.summary-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid hsl(var(--border) / 0.5);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    gap: 0.75rem;
+}
+
+.summary-field:last-child {
+    border-bottom: none;
+}
+
+.summary-field:hover {
+    background: hsl(var(--muted) / 0.5);
+}
+
+.summary-field-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.5;
+    min-width: 70px;
+    flex-shrink: 0;
+}
+
+.summary-field-value {
+    flex: 1;
+    font-size: 0.95rem;
+    font-weight: 500;
+    text-align: right;
+}
+
+.summary-field-value.empty {
+    opacity: 0.3;
+    font-style: italic;
+}
+
+/* Confidence dot */
+.confidence-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.confidence-dot.high   { background: #22c55e; }
+.confidence-dot.medium { background: #f59e0b; }
+.confidence-dot.low    { background: #ef4444; }
+.confidence-dot.none   { background: #6b7280; opacity: 0.3; }
+
+/* ── Mode toggle ── */
+.mode-toggle {
+    display: flex;
+    gap: 0.5rem;
+    padding: 4px;
+    border-radius: 12px;
+    background: hsl(var(--muted));
+    width: fit-content;
+    margin: 0 auto;
+}
+
+.mode-toggle button {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+}
+
+.mode-toggle button.active {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* ── Field mic icon ── */
+.field-mic-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid hsl(var(--border));
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    color: hsl(var(--muted-foreground));
+}
+
+.field-mic-btn:hover {
+    background: hsl(var(--muted));
+    color: #F54142;
+    border-color: #F54142;
+}
+
+.field-mic-btn.active {
+    background: #F54142;
+    color: white;
+    border-color: #F54142;
+    animation: orb-breathe 1.5s ease-in-out infinite;
+}
+
+/* ── Waveform bars (listening indicator) ── */
+.waveform {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 24px;
+}
+
+.waveform-bar {
+    width: 3px;
+    border-radius: 3px;
+    background: white;
+    animation: waveform-dance 0.8s ease-in-out infinite;
+}
+
+.waveform-bar:nth-child(1) { animation-delay: 0s; height: 40%; }
+.waveform-bar:nth-child(2) { animation-delay: 0.1s; height: 70%; }
+.waveform-bar:nth-child(3) { animation-delay: 0.2s; height: 100%; }
+.waveform-bar:nth-child(4) { animation-delay: 0.3s; height: 60%; }
+.waveform-bar:nth-child(5) { animation-delay: 0.15s; height: 80%; }
+
+@keyframes waveform-dance {
+    0%, 100% { transform: scaleY(0.4); }
+    50%      { transform: scaleY(1); }
+}

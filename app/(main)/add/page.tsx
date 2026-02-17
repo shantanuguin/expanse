@@ -2,11 +2,11 @@ import { ExpenseForm } from "@/components/features/expense-form";
 
 export default function AddPage() {
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold tracking-tight">Add Expense</h1>
-                <p className="text-muted-foreground">
-                    Log a new transaction manually or using your voice.
+        <div className="space-y-4 max-w-lg mx-auto py-4 md:py-8">
+            <div className="text-center space-y-1">
+                <h1 className="text-2xl font-bold tracking-tight">Add Transaction</h1>
+                <p className="text-sm text-muted-foreground">
+                    Speak or type — your choice
                 </p>
             </div>
             <ExpenseForm />

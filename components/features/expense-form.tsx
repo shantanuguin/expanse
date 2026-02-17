@@ -1,33 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import "@/app/voice-expense.css";
+
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarIcon, Mic, X, Plus } from "lucide-react";
+import {
+    CalendarIcon, Mic, MicOff, Pencil, Check, RotateCcw,
+    X, Plus, ArrowRight, Keyboard
+} from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
+    Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar"; // Ensure this component exists
+import { Calendar } from "@/components/ui/calendar";
 import { toast } from "sonner";
-import { Textarea } from "@/components/ui/textarea"; // Need to install textarea or use Input
+import { Textarea } from "@/components/ui/textarea";
 
 import { expenseSchema, ExpenseFormValues } from "@/schema/expense";
 import { addDocument, expensesCollection } from "@/lib/firestore-service";
@@ -35,14 +32,35 @@ import { useCollection } from "@/hooks/use-firestore";
 import { Account, Category } from "@/types";
 
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
-import { parseExpenseText } from "@/lib/expense-parser";
+import { parseExpenseText, ParsedExpense, FieldConfidence } from "@/lib/expense-parser";
 import { useAuth } from "@/components/providers/auth-provider";
+import { useCurrency } from "@/components/providers/currency-provider";
 
+/* ────────────────────────────────────────────────────────
+   Types
+   ──────────────────────────────────────────────────────── */
+type AppMode = "voice" | "manual";
+type VoicePhase = "idle" | "listening" | "review";
+
+/* ────────────────────────────────────────────────────────
+   Main Component
+   ──────────────────────────────────────────────────────── */
 export function ExpenseForm() {
     const { user } = useAuth();
+    const { currency } = useCurrency();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [mode, setMode] = useState<AppMode>("voice");
+    const [voicePhase, setVoicePhase] = useState<VoicePhase>("idle");
+    const [parsed, setParsed] = useState<ParsedExpense | null>(null);
+    const [editingField, setEditingField] = useState<string | null>(null);
+
     const { data: categories } = useCollection<Category>("categories", user?.uid);
     const { data: accounts } = useCollection<Account>("accounts", user?.uid);
+
+    const {
+        isListening, transcript, interimTranscript, confidence,
+        isSupported, startListening, stopListening, resetTranscript, error,
+    } = useSpeechRecognition();
 
     const form = useForm<ExpenseFormValues>({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,7 +68,7 @@ export function ExpenseForm() {
         defaultValues: {
             type: "expense",
             amount: 0,
-            currency: "USD",
+            currency,
             description: "",
             date: new Date(),
             merchant: "",
@@ -61,20 +79,90 @@ export function ExpenseForm() {
         },
     });
 
+    /* ── Auto-start mic on mount (voice mode) ── */
+    const hasAutoStarted = useRef(false);
+    useEffect(() => {
+        if (mode === "voice" && voicePhase === "idle" && isSupported && !hasAutoStarted.current) {
+            hasAutoStarted.current = true;
+            // Small delay so the page renders first
+            const t = setTimeout(() => {
+                startListening();
+                setVoicePhase("listening");
+            }, 800);
+            return () => clearTimeout(t);
+        }
+    }, [mode, voicePhase, isSupported, startListening]);
+
+    /* ── When listening stops, parse the transcript ── */
+    useEffect(() => {
+        if (!isListening && voicePhase === "listening" && transcript.trim()) {
+            const result = parseExpenseText(
+                transcript,
+                categories.map((c) => ({ id: c.id, name: c.name }))
+            );
+            setParsed(result);
+            setVoicePhase("review");
+
+            // Fill form from parsed result
+            if (result.type) form.setValue("type", result.type);
+            if (result.amount) form.setValue("amount", result.amount);
+            if (result.currency) form.setValue("currency", result.currency);
+            if (result.description) form.setValue("description", result.description);
+            if (result.merchant) form.setValue("merchant", result.merchant);
+            if (result.date) form.setValue("date", result.date);
+            if (result.categoryId) form.setValue("categoryId", result.categoryId);
+        }
+    }, [isListening, voicePhase, transcript, categories, form]);
+
+    /* ── Handlers ── */
+    const handleOrbTap = useCallback(() => {
+        if (isListening) {
+            stopListening();
+        } else {
+            resetTranscript();
+            setParsed(null);
+            setVoicePhase("listening");
+            startListening();
+        }
+    }, [isListening, stopListening, resetTranscript, startListening]);
+
+    const handleTryAgain = useCallback(() => {
+        resetTranscript();
+        setParsed(null);
+        form.reset();
+        setVoicePhase("idle");
+        setTimeout(() => {
+            startListening();
+            setVoicePhase("listening");
+        }, 300);
+    }, [resetTranscript, form, startListening]);
+
+    const handleSwitchMode = useCallback((newMode: AppMode) => {
+        if (isListening) stopListening();
+        setMode(newMode);
+        if (newMode === "voice") {
+            setVoicePhase("idle");
+            setParsed(null);
+            resetTranscript();
+            hasAutoStarted.current = false;
+        }
+    }, [isListening, stopListening, resetTranscript]);
+
     async function onSubmit(data: ExpenseFormValues) {
         if (!user) {
-            toast.error("You must be logged in to add an expense.");
+            toast.error("You must be logged in.");
             return;
         }
-
         setIsSubmitting(true);
         try {
             await addDocument(expensesCollection, {
                 ...data,
-                tags: data.tags ? (typeof data.tags === 'string' ? data.tags.split(",").map(t => t.trim()) : data.tags) : [],
+                tags: data.tags
+                    ? typeof data.tags === "string" ? data.tags.split(",").map((t) => t.trim()) : data.tags
+                    : [],
             }, user.uid);
             form.reset({
-                type: data.type, // Keep same type for next entry
+                type: data.type,
                 amount: 0,
                 currency: data.currency,
                 description: "",
@@ -85,370 +173,726 @@ export function ExpenseForm() {
                 accountId: "",
                 tags: "",
             });
-            toast.success("Transaction added successfully!");
+            toast.success("Transaction saved!");
+            // Reset voice mode for next entry
+            if (mode === "voice") {
+                setParsed(null);
+                resetTranscript();
+                setVoicePhase("idle");
+                hasAutoStarted.current = false;
+            }
         } catch (error) {
             console.error("Failed to add transaction", error);
-            toast.error("Failed to add transaction. Please try again.");
+            toast.error("Failed to save. Please try again.");
         } finally {
             setIsSubmitting(false);
         }
     }
 
+    /* ────────────────────────────────────────────
+       Render
+       ──────────────────────────────────────────── */
     return (
-        <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-w-2xl mx-auto p-4 md:p-8 bg-card rounded-lg shadow-sm border">
+        <div className="max-w-lg mx-auto space-y-5">
+            {/* Mode Toggle */}
+            <div className="mode-toggle">
+                <button
+                    type="button"
+                    className={mode === "voice" ? "active" : ""}
+                    onClick={() => handleSwitchMode("voice")}
+                >
+                    <Mic className="inline-block h-3.5 w-3.5 mr-1.5" />
+                    Voice
+                </button>
+                <button
+                    type="button"
+                    className={mode === "manual" ? "active" : ""}
+                    onClick={() => handleSwitchMode("manual")}
+                >
+                    <Keyboard className="inline-block h-3.5 w-3.5 mr-1.5" />
+                    Manual
+                </button>
+            </div>
 
-                <FormField
-                    control={form.control}
-                    name="type"
-                    render={({ field }) => (
-                        <FormItem className="space-y-3">
-                            <FormLabel>Transaction Type</FormLabel>
-                            <FormControl>
-                                <div className="flex gap-4">
-                                    <Button
-                                        type="button"
-                                        variant={field.value === "expense" ? "default" : "outline"}
-                                        className="flex-1"
-                                        onClick={() => field.onChange("expense")}
-                                    >
-                                        Expense
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant={field.value === "income" ? "default" : "outline"}
-                                        className="flex-1"
-                                        onClick={() => field.onChange("income")}
-                                    >
-                                        Income
-                                    </Button>
-                                </div>
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                <div className="flex gap-4">
-                    <FormField
-                        control={form.control}
-                        name="amount"
-                        render={({ field }) => (
-                            <FormItem className="flex-1">
-                                <FormLabel>Amount</FormLabel>
-                                <FormControl>
-                                    <Input type="number" placeholder="0.00" step="0.01" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-
-                    <FormField
-                        control={form.control}
-                        name="currency"
-                        render={({ field }) => (
-                            <FormItem className="w-24">
-                                <FormLabel>Currency</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Cur" />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="USD">USD</SelectItem>
-                                        <SelectItem value="JOD">JOD</SelectItem>
-                                        <SelectItem value="INR">INR</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-
-                <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel className="flex justify-between items-center">
-                                Description
-                                <VoiceInput onTranscript={(text) => {
-                                    // Parse and fill form
-                                    const parsed = parseExpenseText(text);
-                                    if (parsed.description) form.setValue("description", parsed.description);
-                                    if (parsed.amount) form.setValue("amount", parsed.amount);
-                                    if (parsed.currency) form.setValue("currency", parsed.currency);
-                                    if (parsed.merchant) form.setValue("merchant", parsed.merchant);
-                                    if (parsed.date) form.setValue("date", parsed.date);
-                                }} />
-                            </FormLabel>
-                            <FormControl>
-                                <div className="relative">
-                                    <Input placeholder="Groceries, Uber, etc." {...field} />
-                                </div>
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-
-                <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
-                    <div className="flex items-center justify-between">
-                        <FormLabel>Category Split</FormLabel>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                                const currentSplits = form.getValues("splits") || [];
-                                if (currentSplits.length > 0) {
-                                    form.setValue("splits", undefined);
-                                    form.setValue("categoryId", "");
-                                } else {
-                                    form.setValue("splits", [
-                                        { amount: 0, categoryId: "" },
-                                        { amount: 0, categoryId: "" }
-                                    ]);
-                                    form.setValue("categoryId", "split"); // Marker
-                                }
-                            }}
-                        >
-                            {form.watch("splits")?.length ? "Disable Split" : "Enable Split"}
-                        </Button>
-                    </div>
-
-                    {!form.watch("splits")?.length ? (
-                        <FormField
-                            control={form.control}
-                            name="categoryId"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormControl>
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select Category" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {categories?.length ? categories.map(cat => (
-                                                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                                                )) : <SelectItem value="default" disabled>No categories found</SelectItem>}
-                                            </SelectContent>
-                                        </Select>
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    ) : (
-                        <div className="space-y-3">
-                            <div className="text-sm text-muted-foreground flex justify-between">
-                                <span>Total: {form.watch("amount")}</span>
-                                <span className={
-                                    (form.watch("splits")?.reduce((sum, s) => sum + (Number(s.amount) || 0), 0) || 0) === Number(form.watch("amount"))
-                                        ? "text-green-600"
-                                        : "text-red-600"
-                                }>
-                                    Split Total: {form.watch("splits")?.reduce((sum, s) => sum + (Number(s.amount) || 0), 0) || 0}
-                                </span>
-                            </div>
-
-                            {form.watch("splits")?.map((_, index) => (
-                                <div key={index} className="flex gap-2 items-start">
-                                    <FormField
-                                        control={form.control}
-                                        name={`splits.${index}.categoryId`}
-                                        render={({ field }) => (
-                                            <FormItem className="flex-1">
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Category" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        {categories?.map(cat => (
-                                                            <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <FormField
-                                        control={form.control}
-                                        name={`splits.${index}.amount`}
-                                        render={({ field }) => (
-                                            <FormItem className="w-24">
-                                                <FormControl>
-                                                    <Input
-                                                        type="number"
-                                                        placeholder="0.00"
-                                                        {...field}
-                                                        onChange={e => field.onChange(parseFloat(e.target.value))}
-                                                    />
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                            const splits = form.getValues("splits") || [];
-                                            if (splits.length > 2) {
-                                                form.setValue("splits", splits.filter((_, i) => i !== index));
-                                            }
-                                        }}
-                                        disabled={(form.watch("splits")?.length || 0) <= 2}
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            ))}
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                    const splits = form.getValues("splits") || [];
-                                    form.setValue("splits", [...splits, { amount: 0, categoryId: "" }]);
-                                }}
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)}>
+                    <AnimatePresence mode="wait">
+                        {mode === "voice" ? (
+                            <motion.div
+                                key="voice"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                transition={{ duration: 0.3 }}
                             >
-                                <Plus className="mr-2 h-4 w-4" /> Add Split
-                            </Button>
-                        </div>
-                    )}
-
-                    <FormField
-                        control={form.control}
-                        name="accountId"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Account</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select Account" />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        {accounts?.length ? accounts.map(acc => (
-                                            <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
-                                        )) : <SelectItem value="default" disabled>No accounts found</SelectItem>}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
+                                <VoiceMode
+                                    voicePhase={voicePhase}
+                                    isListening={isListening}
+                                    transcript={transcript}
+                                    interimTranscript={interimTranscript}
+                                    confidence={confidence}
+                                    parsed={parsed}
+                                    isSupported={isSupported}
+                                    error={error}
+                                    categories={categories}
+                                    accounts={accounts}
+                                    form={form}
+                                    editingField={editingField}
+                                    setEditingField={setEditingField}
+                                    isSubmitting={isSubmitting}
+                                    onOrbTap={handleOrbTap}
+                                    onTryAgain={handleTryAgain}
+                                    onSwitchManual={() => handleSwitchMode("manual")}
+                                />
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="manual"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                transition={{ duration: 0.3 }}
+                            >
+                                <ManualMode
+                                    form={form}
+                                    categories={categories}
+                                    accounts={accounts}
+                                    isSubmitting={isSubmitting}
+                                />
+                            </motion.div>
                         )}
-                    />
-                </div>
-
-                <FormField
-                    control={form.control}
-                    name="date"
-                    render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                            <FormLabel>Date</FormLabel>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <FormControl>
-                                        <Button
-                                            variant={"outline"}
-                                            className={cn(
-                                                "w-full pl-3 text-left font-normal",
-                                                !field.value && "text-muted-foreground"
-                                            )}
-                                        >
-                                            {field.value ? (
-                                                format(field.value, "PPP")
-                                            ) : (
-                                                <span>Pick a date</span>
-                                            )}
-                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                        </Button>
-                                    </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                        mode="single"
-                                        selected={field.value}
-                                        onSelect={field.onChange}
-                                        disabled={(date) =>
-                                            date > new Date() || date < new Date("1900-01-01")
-                                        }
-                                        initialFocus
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Notes (Optional)</FormLabel>
-                            <FormControl>
-                                <Textarea placeholder="Additional details..." className="resize-none" {...field} />
-                            </FormControl>
-                        </FormItem>
-                    )}
-                />
-
-                <FormField
-                    control={form.control}
-                    name="tags"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Tags (Comma separated)</FormLabel>
-                            <FormControl>
-                                <Input placeholder="work, travel, food" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => form.reset()}>Reset</Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting ? "Saving..." : "Save Expense"}
-                    </Button>
-                </div>
-            </form>
-        </Form>
+                    </AnimatePresence>
+                </form>
+            </Form>
+        </div>
     );
 }
 
-function VoiceInput({ onTranscript }: { onTranscript: (text: string) => void }) {
-    const { isListening, startListening, stopListening, transcript } = useSpeechRecognition();
-
-    useEffect(() => {
-        if (transcript) {
-            onTranscript(transcript);
-        }
-    }, [transcript, onTranscript]);
+/* ════════════════════════════════════════════════════════
+   VOICE MODE
+   ════════════════════════════════════════════════════════ */
+function VoiceMode({
+    voicePhase, isListening, transcript, interimTranscript,
+    parsed, isSupported, error,
+    categories, accounts, form, editingField, setEditingField,
+    isSubmitting, onOrbTap, onTryAgain, onSwitchManual, confidence,
+}: {
+    voicePhase: VoicePhase;
+    isListening: boolean;
+    transcript: string;
+    interimTranscript: string;
+    confidence: number;
+    parsed: ParsedExpense | null;
+    isSupported: boolean;
+    error: string | null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    categories: Category[];
+    accounts: Account[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    form: any;
+    editingField: string | null;
+    setEditingField: (f: string | null) => void;
+    isSubmitting: boolean;
+    onOrbTap: () => void;
+    onTryAgain: () => void;
+    onSwitchManual: () => void;
+}) {
+    if (!isSupported) {
+        return (
+            <div className="text-center p-8 space-y-4">
+                <MicOff className="h-12 w-12 mx-auto text-muted-foreground" />
+                <p className="text-muted-foreground">
+                    Your browser doesn&apos;t support speech recognition.
+                </p>
+                <Button type="button" onClick={onSwitchManual}>
+                    Use Manual Entry
+                </Button>
+            </div>
+        );
+    }
 
     return (
-        <div className="flex items-center gap-2">
-            <Button
-                type="button"
-                variant={isListening ? "destructive" : "secondary"}
-                size="icon"
-                onClick={isListening ? stopListening : startListening}
-                title={isListening ? "Stop Listening" : "Start Voice Input"}
-            >
-                <Mic className={cn("h-4 w-4", isListening && "animate-pulse")} />
-            </Button>
-            {isListening && <span className="text-xs text-muted-foreground animate-pulse">Listening...</span>}
+        <div className="space-y-6">
+            {/* ── Listening / Idle Phase ── */}
+            {(voicePhase === "idle" || voicePhase === "listening") && (
+                <div className="voice-orb-wrapper">
+                    <button
+                        type="button"
+                        className={cn("voice-orb", isListening && "listening")}
+                        onClick={onOrbTap}
+                    >
+                        {isListening ? (
+                            <div className="waveform">
+                                <div className="waveform-bar" />
+                                <div className="waveform-bar" />
+                                <div className="waveform-bar" />
+                                <div className="waveform-bar" />
+                                <div className="waveform-bar" />
+                            </div>
+                        ) : (
+                            <Mic className="h-10 w-10" />
+                        )}
+                    </button>
+
+                    {/* Streaming transcript */}
+                    <div className="voice-transcript-area">
+                        {transcript && (
+                            <span className="voice-transcript-final">{transcript}</span>
+                        )}
+                        {interimTranscript && (
+                            <span className="voice-transcript-interim">{interimTranscript}</span>
+                        )}
+                        {!transcript && !interimTranscript && !isListening && (
+                            <span className="text-muted-foreground text-sm">
+                                Tap the mic to start
+                            </span>
+                        )}
+                    </div>
+
+                    <p className="voice-hint">
+                        {isListening
+                            ? "Listening... tap to stop"
+                            : "Say something like \"Spent 25 dollars on pizza at Dominos yesterday\""}
+                    </p>
+
+                    {error && (
+                        <p className="text-destructive text-sm">{error}</p>
+                    )}
+                </div>
+            )}
+
+            {/* ── Review Phase: Editable Summary Card ── */}
+            {voicePhase === "review" && parsed && (
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-4"
+                >
+                    {/* Original transcript */}
+                    <div className="text-center px-4">
+                        <p className="text-sm text-muted-foreground italic">
+                            &ldquo;{transcript}&rdquo;
+                        </p>
+                        {confidence > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Recognition confidence: {Math.round(confidence * 100)}%
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Summary Card */}
+                    <div className="summary-card">
+                        {/* Type */}
+                        <SummaryField
+                            label="Type"
+                            value={form.watch("type") === "income" ? "Income" : "Expense"}
+                            confidence="high"
+                            isEditing={editingField === "type"}
+                            onStartEdit={() => setEditingField("type")}
+                            onStopEdit={() => setEditingField(null)}
+                            editContent={
+                                <div className="flex gap-2 w-full">
+                                    <Button
+                                        type="button" size="sm" className="flex-1"
+                                        variant={form.watch("type") === "expense" ? "default" : "outline"}
+                                        onClick={() => { form.setValue("type", "expense"); setEditingField(null); }}
+                                    >Expense</Button>
+                                    <Button
+                                        type="button" size="sm" className="flex-1"
+                                        variant={form.watch("type") === "income" ? "default" : "outline"}
+                                        onClick={() => { form.setValue("type", "income"); setEditingField(null); }}
+                                    >Income</Button>
+                                </div>
+                            }
+                        />
+
+                        {/* Amount + Currency */}
+                        <SummaryField
+                            label="Amount"
+                            value={form.watch("amount") ? `${form.watch("currency")} ${form.watch("amount")}` : ""}
+                            confidence={parsed.confidence.amount}
+                            isEditing={editingField === "amount"}
+                            onStartEdit={() => setEditingField("amount")}
+                            onStopEdit={() => setEditingField(null)}
+                            editContent={
+                                <div className="flex gap-2 w-full">
+                                    <Input
+                                        type="number" step="0.01" className="flex-1"
+                                        defaultValue={form.watch("amount")}
+                                        onChange={(e) => form.setValue("amount", parseFloat(e.target.value) || 0)}
+                                    />
+                                    <Select
+                                        defaultValue={form.watch("currency")}
+                                        onValueChange={(v) => form.setValue("currency", v)}
+                                    >
+                                        <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="USD">USD</SelectItem>
+                                            <SelectItem value="JOD">JOD</SelectItem>
+                                            <SelectItem value="INR">INR</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Button type="button" size="icon" variant="ghost" onClick={() => setEditingField(null)}>
+                                        <Check className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            }
+                        />
+
+                        {/* Description */}
+                        <SummaryField
+                            label="What"
+                            value={form.watch("description")}
+                            confidence={parsed.confidence.description}
+                            isEditing={editingField === "description"}
+                            onStartEdit={() => setEditingField("description")}
+                            onStopEdit={() => setEditingField(null)}
+                            editContent={
+                                <div className="flex gap-2 w-full">
+                                    <Input
+                                        defaultValue={form.watch("description")}
+                                        onChange={(e) => form.setValue("description", e.target.value)}
+                                        className="flex-1"
+                                    />
+                                    <Button type="button" size="icon" variant="ghost" onClick={() => setEditingField(null)}>
+                                        <Check className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            }
+                        />
+
+                        {/* Category */}
+                        <SummaryField
+                            label="Category"
+                            value={
+                                parsed.categoryName ||
+                                categories.find((c) => c.id === form.watch("categoryId"))?.name ||
+                                ""
+                            }
+                            confidence={parsed.confidence.category}
+                            isEditing={editingField === "category"}
+                            onStartEdit={() => setEditingField("category")}
+                            onStopEdit={() => setEditingField(null)}
+                            editContent={
+                                <div className="flex gap-2 w-full items-center">
+                                    <Select
+                                        defaultValue={form.watch("categoryId")}
+                                        onValueChange={(v) => form.setValue("categoryId", v)}
+                                    >
+                                        <SelectTrigger className="flex-1"><SelectValue placeholder="Pick category" /></SelectTrigger>
+                                        <SelectContent>
+                                            {categories.map((c) => (
+                                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button type="button" size="icon" variant="ghost" onClick={() => setEditingField(null)}>
+                                        <Check className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            }
+                        />
+
+                        {/* Account */}
+                        <SummaryField
+                            label="Account"
+                            value={accounts.find((a) => a.id === form.watch("accountId"))?.name || ""}
+                            confidence="none"
+                            isEditing={editingField === "account"}
+                            onStartEdit={() => setEditingField("account")}
+                            onStopEdit={() => setEditingField(null)}
+                            editContent={
+                                <div className="flex gap-2 w-full items-center">
+                                    <Select
+                                        defaultValue={form.watch("accountId")}
+                                        onValueChange={(v) => form.setValue("accountId", v)}
+                                    >
+                                        <SelectTrigger className="flex-1"><SelectValue placeholder="Pick account" /></SelectTrigger>
+                                        <SelectContent>
+                                            {accounts.map((a) => (
+                                                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button type="button" size="icon" variant="ghost" onClick={() => setEditingField(null)}>
+                                        <Check className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            }
+                        />
+
+                        {/* Merchant */}
+                        <SummaryField
+                            label="Where"
+                            value={form.watch("merchant") || ""}
+                            confidence={parsed.confidence.merchant}
+                            isEditing={editingField === "merchant"}
+                            onStartEdit={() => setEditingField("merchant")}
+                            onStopEdit={() => setEditingField(null)}
+                            editContent={
+                                <div className="flex gap-2 w-full">
+                                    <Input
+                                        defaultValue={form.watch("merchant")}
+                                        onChange={(e) => form.setValue("merchant", e.target.value)}
+                                        className="flex-1"
+                                        placeholder="Merchant name"
+                                    />
+                                    <Button type="button" size="icon" variant="ghost" onClick={() => setEditingField(null)}>
+                                        <Check className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            }
+                        />
+
+                        {/* Date */}
+                        <SummaryField
+                            label="When"
+                            value={form.watch("date") ? format(form.watch("date"), "PPP") : ""}
+                            confidence={parsed.confidence.date}
+                            isEditing={editingField === "date"}
+                            onStartEdit={() => setEditingField("date")}
+                            onStopEdit={() => setEditingField(null)}
+                            editContent={
+                                <div className="w-full">
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" className="w-full justify-start text-left">
+                                                {form.watch("date") ? format(form.watch("date"), "PPP") : "Pick a date"}
+                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                                mode="single"
+                                                selected={form.watch("date")}
+                                                onSelect={(d) => { if (d) form.setValue("date", d); setEditingField(null); }}
+                                                disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                                                initialFocus
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                            }
+                        />
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-3">
+                        <Button
+                            type="button" variant="outline" className="flex-1"
+                            onClick={onTryAgain}
+                        >
+                            <RotateCcw className="h-4 w-4 mr-2" /> Try Again
+                        </Button>
+                        <Button
+                            type="submit" className="flex-1 bg-[#F54142] hover:bg-[#d63636]"
+                            disabled={isSubmitting || !form.watch("amount")}
+                        >
+                            {isSubmitting ? "Saving..." : "Confirm & Save"}
+                            {!isSubmitting && <ArrowRight className="h-4 w-4 ml-2" />}
+                        </Button>
+                    </div>
+                </motion.div>
+            )}
         </div>
+    );
+}
+
+/* ── Summary Field (tappable row in the card) ── */
+function SummaryField({
+    label, value, confidence, isEditing,
+    onStartEdit, onStopEdit, editContent,
+}: {
+    label: string;
+    value: string;
+    confidence: FieldConfidence;
+    isEditing: boolean;
+    onStartEdit: () => void;
+    onStopEdit: () => void;
+    editContent: React.ReactNode;
+}) {
+    return (
+        <div className="summary-field" onClick={!isEditing ? onStartEdit : undefined}>
+            <span className="summary-field-label">{label}</span>
+            {isEditing ? (
+                <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                    {editContent}
+                </div>
+            ) : (
+                <>
+                    <span className={cn("summary-field-value", !value && "empty")}>
+                        {value || "Tap to set"}
+                    </span>
+                    <span className={cn("confidence-dot", confidence)} />
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-40" />
+                </>
+            )}
+        </div>
+    );
+}
+
+/* ════════════════════════════════════════════════════════
+   MANUAL MODE  (traditional form + per-field mic icons)
+   ════════════════════════════════════════════════════════ */
+function ManualMode({
+    form, categories, accounts, isSubmitting,
+}: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    form: any;
+    categories: Category[];
+    accounts: Account[];
+    isSubmitting: boolean;
+}) {
+    return (
+        <div className="space-y-5 p-4 md:p-6 bg-card rounded-xl border">
+            {/* Type toggle */}
+            <FormField
+                control={form.control}
+                name="type"
+                render={({ field }: { field: { value: string; onChange: (v: string) => void } }) => (
+                    <FormItem className="space-y-2">
+                        <FormLabel>Type</FormLabel>
+                        <FormControl>
+                            <div className="flex gap-3">
+                                <Button
+                                    type="button" className="flex-1"
+                                    variant={field.value === "expense" ? "default" : "outline"}
+                                    onClick={() => field.onChange("expense")}
+                                >Expense</Button>
+                                <Button
+                                    type="button" className="flex-1"
+                                    variant={field.value === "income" ? "default" : "outline"}
+                                    onClick={() => field.onChange("income")}
+                                >Income</Button>
+                            </div>
+                        </FormControl>
+                    </FormItem>
+                )}
+            />
+
+            {/* Amount + Currency */}
+            <div className="flex gap-3">
+                <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }: { field: React.InputHTMLAttributes<HTMLInputElement> }) => (
+                        <FormItem className="flex-1">
+                            <FormLabel className="flex justify-between items-center">
+                                Amount
+                                <FieldMic onResult={(t) => {
+                                    const num = parseFloat(t.replace(/[^0-9.]/g, ""));
+                                    if (!isNaN(num)) form.setValue("amount", num);
+                                }} />
+                            </FormLabel>
+                            <FormControl>
+                                <Input type="number" placeholder="0.00" step="0.01" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="currency"
+                    render={({ field }: { field: { value: string; onChange: (v: string) => void } }) => (
+                        <FormItem className="w-24">
+                            <FormLabel>Currency</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                    <SelectTrigger><SelectValue placeholder="Cur" /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    <SelectItem value="USD">USD</SelectItem>
+                                    <SelectItem value="JOD">JOD</SelectItem>
+                                    <SelectItem value="INR">INR</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </FormItem>
+                    )}
+                />
+            </div>
+
+            {/* Description */}
+            <FormField
+                control={form.control}
+                name="description"
+                render={({ field }: { field: React.InputHTMLAttributes<HTMLInputElement> }) => (
+                    <FormItem>
+                        <FormLabel className="flex justify-between items-center">
+                            Description
+                            <FieldMic onResult={(t) => form.setValue("description", t)} />
+                        </FormLabel>
+                        <FormControl>
+                            <Input placeholder="Groceries, Uber, etc." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+
+            {/* Category */}
+            <FormField
+                control={form.control}
+                name="categoryId"
+                render={({ field }: { field: { value: string; onChange: (v: string) => void } }) => (
+                    <FormItem>
+                        <FormLabel>Category</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                                <SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {categories?.length ? categories.map((cat) => (
+                                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                                )) : <SelectItem value="default" disabled>No categories found</SelectItem>}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+
+            {/* Account */}
+            <FormField
+                control={form.control}
+                name="accountId"
+                render={({ field }: { field: { value: string; onChange: (v: string) => void } }) => (
+                    <FormItem>
+                        <FormLabel>Account</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                                <SelectTrigger><SelectValue placeholder="Select Account" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {accounts?.length ? accounts.map((acc) => (
+                                    <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>
+                                )) : <SelectItem value="default" disabled>No accounts found</SelectItem>}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+
+            {/* Date */}
+            <FormField
+                control={form.control}
+                name="date"
+                render={({ field }: { field: { value: Date; onChange: (v: Date) => void } }) => (
+                    <FormItem className="flex flex-col">
+                        <FormLabel>Date</FormLabel>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <FormControl>
+                                    <Button
+                                        variant="outline"
+                                        className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
+                                    >
+                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={(d) => { if (d) field.onChange(d); }}
+                                    disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+
+            {/* Merchant */}
+            <FormField
+                control={form.control}
+                name="merchant"
+                render={({ field }: { field: React.InputHTMLAttributes<HTMLInputElement> }) => (
+                    <FormItem>
+                        <FormLabel className="flex justify-between items-center">
+                            Merchant
+                            <FieldMic onResult={(t) => form.setValue("merchant", t)} />
+                        </FormLabel>
+                        <FormControl>
+                            <Input placeholder="Store or service name" {...field} />
+                        </FormControl>
+                    </FormItem>
+                )}
+            />
+
+            {/* Notes */}
+            <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }: { field: React.TextareaHTMLAttributes<HTMLTextAreaElement> }) => (
+                    <FormItem>
+                        <FormLabel>Notes (Optional)</FormLabel>
+                        <FormControl>
+                            <Textarea placeholder="Additional details..." className="resize-none" {...field} />
+                        </FormControl>
+                    </FormItem>
+                )}
+            />
+
+            {/* Tags */}
+            <FormField
+                control={form.control}
+                name="tags"
+                render={({ field }: { field: React.InputHTMLAttributes<HTMLInputElement> }) => (
+                    <FormItem>
+                        <FormLabel>Tags</FormLabel>
+                        <FormControl>
+                            <Input placeholder="work, travel, food" {...field} />
+                        </FormControl>
+                    </FormItem>
+                )}
+            />
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => form.reset()}>Reset</Button>
+                <Button type="submit" disabled={isSubmitting} className="bg-[#F54142] hover:bg-[#d63636]">
+                    {isSubmitting ? "Saving..." : "Save"}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+/* ── Per-field microphone button ── */
+function FieldMic({ onResult }: { onResult: (text: string) => void }) {
+    const { isListening, transcript, startListening, stopListening, resetTranscript } =
+        useSpeechRecognition();
+
+    useEffect(() => {
+        if (!isListening && transcript) {
+            onResult(transcript);
+            resetTranscript();
+        }
+    }, [isListening, transcript, onResult, resetTranscript]);
+
+    return (
+        <button
+            type="button"
+            className={cn("field-mic-btn", isListening && "active")}
+            onClick={(e) => {
+                e.preventDefault();
+                if (isListening) {
+                    stopListening();
+                } else {
+                    resetTranscript();
+                    startListening();
+                }
+            }}
+            title={isListening ? "Stop" : "Voice input"}
+        >
+            <Mic className="h-3.5 w-3.5" />
+        </button>
     );
 }
