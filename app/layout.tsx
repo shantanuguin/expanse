@@ -1,12 +1,26 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google"; // Using Inter as requested
+import { Onest } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { CurrencyProvider } from "@/components/providers/currency-provider";
 
-const inter = Inter({ subsets: ["latin"] });
+/* ── Onest — body text (clean, readable, geometric sans-serif) ── */
+const onest = Onest({
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
+});
+
+/* ── Cal Sans — headings (bold, geometric display font) ── */
+const calSans = localFont({
+  src: "../public/fonts/CalSans-SemiBold.woff2",
+  variable: "--font-heading",
+  display: "swap",
+  weight: "600",
+});
 
 export const metadata: Metadata = {
   title: "Expanse",
@@ -21,7 +35,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${onest.variable} ${calSans.variable} ${onest.className}`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

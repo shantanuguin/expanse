@@ -41,7 +41,7 @@ export function AccountList() {
     return (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {accounts.map(account => (
-                <Card key={account.id}>
+                <Card key={account.id} className="rounded-2xl card-hover">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">
                             {account.name}

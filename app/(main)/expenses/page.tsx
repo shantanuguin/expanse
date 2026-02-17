@@ -25,7 +25,7 @@ export default function ExpensesPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-2">
-                    <h1 className="text-3xl font-bold tracking-tight">Expenses</h1>
+                    <h1 className="text-3xl font-bold tracking-tight font-heading">Expenses</h1>
                     <p className="text-muted-foreground">
                         View and manage your transaction history.
                     </p>

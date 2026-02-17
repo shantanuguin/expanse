@@ -79,7 +79,7 @@ export default function RecurringPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Subscriptions</h1>
+                    <h1 className="text-3xl font-bold tracking-tight font-heading">Subscriptions</h1>
                     <p className="text-muted-foreground">Manage recurring bills and expenses.</p>
                 </div>
                 <div className="flex gap-2">
@@ -107,7 +107,7 @@ export default function RecurringPage() {
                     const nextDue = (sub.nextDueDate as unknown as { toDate: () => Date }).toDate ? (sub.nextDueDate as unknown as { toDate: () => Date }).toDate() : new Date(sub.nextDueDate);
 
                     return (
-                        <Card key={sub.id}>
+                        <Card key={sub.id} className="rounded-2xl card-hover">
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">
                                     {sub.description}

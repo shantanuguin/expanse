@@ -21,7 +21,7 @@ export default function DebtsPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Debts & IOUs</h1>
+                    <h1 className="text-3xl font-bold tracking-tight font-heading">Debts & IOUs</h1>
                     <p className="text-muted-foreground">
                         Track money you lent or borrowed.
                     </p>

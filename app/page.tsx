@@ -7,6 +7,9 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { SmoothScrollProvider } from "@/components/providers/smooth-scroll-provider";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 /* ──────────────────────────────────────────────
    Infinite Scroll Ribbon (text marquee)
@@ -95,13 +98,13 @@ function FloatingElements() {
                 </div>
             </div>
             <div className="landing-float-el landing-float-4">
-                <div className="landing-float-card landing-float-card--dark">
+                <div className="landing-float-card landing-float-card--red">
                     <span className="landing-float-card-icon">⚡</span>
                     <span className="landing-float-card-text">Fast</span>
                 </div>
             </div>
             <div className="landing-float-el landing-float-5">
-                <div className="landing-float-card landing-float-card--red">
+                <div className="landing-float-card landing-float-card--dark">
                     <span className="landing-float-card-icon">🌍</span>
                     <span className="landing-float-card-text">Multi‑Currency</span>
                 </div>
@@ -127,7 +130,72 @@ export default function LandingPage() {
     useEffect(() => {
         const onScroll = () => setScrollY(window.scrollY);
         window.addEventListener("scroll", onScroll, { passive: true });
-        return () => window.removeEventListener("scroll", onScroll);
+
+        // Register ScrollTrigger
+        gsap.registerPlugin(ScrollTrigger);
+
+        // GSAP Animations
+        const ctx = gsap.context(() => {
+            // Hero section reveal
+            gsap.from(".landing-hero-text > *", {
+                y: 30,
+                opacity: 0,
+                duration: 1,
+                stagger: 0.1,
+                ease: "power4.out",
+            });
+
+            gsap.from(".landing-hero-visual", {
+                scale: 0.9,
+                opacity: 0,
+                duration: 1.2,
+                ease: "power4.out",
+                delay: 0.4,
+            });
+
+            // Feature cards reveal
+            gsap.from(".landing-feature-card", {
+                scrollTrigger: {
+                    trigger: ".landing-features-grid",
+                    start: "top 80%",
+                },
+                y: 40,
+                opacity: 0,
+                duration: 0.8,
+                stagger: 0.08,
+                ease: "power3.out",
+            });
+
+            // Stats reveal
+            gsap.from(".landing-stat", {
+                scrollTrigger: {
+                    trigger: ".landing-stats-section",
+                    start: "top 85%",
+                },
+                scale: 0.8,
+                opacity: 0,
+                duration: 0.6,
+                stagger: 0.1,
+                ease: "back.out(1.7)",
+            });
+
+            // CTA reveal
+            gsap.from(".landing-cta-card", {
+                scrollTrigger: {
+                    trigger: ".landing-cta-section",
+                    start: "top 85%",
+                },
+                y: 30,
+                opacity: 0,
+                duration: 1,
+                ease: "power3.out",
+            });
+        });
+
+        return () => {
+            window.removeEventListener("scroll", onScroll);
+            ctx.revert();
+        };
     }, []);
 
     if (loading || user) {
@@ -153,107 +221,109 @@ export default function LandingPage() {
     ];
 
     return (
-        <div className="landing-root">
-            {/* ─── NAVBAR ─── */}
-            <nav className="landing-nav" style={{ backdropFilter: scrollY > 40 ? "blur(16px)" : "none", background: scrollY > 40 ? "rgba(255,255,255,0.85)" : "transparent" }}>
-                <div className="landing-nav-inner">
-                    <Link href="/" className="landing-logo">
-                        <span className="landing-logo-dot" />
-                        Expanse
-                    </Link>
-                    <div className="landing-nav-actions">
-                        <Link href="/login" className="landing-nav-link">Log in</Link>
-                        <Link href="/signup" className="landing-btn landing-btn--sm">Get Started</Link>
-                    </div>
-                </div>
-            </nav>
-
-            {/* ─── HERO ─── */}
-            <section className="landing-hero">
-                <div className="landing-hero-bg" />
-                <div className="landing-hero-content">
-                    <div className="landing-hero-text">
-                        <div className="landing-badge">✨ Personal Finance, Reimagined</div>
-                        <h1 className="landing-h1">
-                            Take control of<br />
-                            <span className="landing-h1-accent">every penny.</span>
-                        </h1>
-                        <p className="landing-hero-sub">
-                            Expanse is the beautiful, privacy‑first expense tracker that helps you
-                            understand your spending, hit your goals, and build real wealth.
-                        </p>
-                        <div className="landing-hero-cta">
-                            <Link href="/signup" className="landing-btn landing-btn--lg">
-                                Start Free →
-                            </Link>
-                            <Link href="/login" className="landing-btn landing-btn--ghost landing-btn--lg">
-                                I have an account
-                            </Link>
+        <SmoothScrollProvider>
+            <div className="landing-root">
+                {/* ─── NAVBAR ─── */}
+                <nav className="landing-nav" style={{ backdropFilter: scrollY > 40 ? "blur(16px)" : "none", background: scrollY > 40 ? "rgba(255,255,255,0.85)" : "transparent" }}>
+                    <div className="landing-nav-inner">
+                        <Link href="/" className="landing-logo">
+                            <span className="landing-logo-dot" />
+                            Expanse
+                        </Link>
+                        <div className="landing-nav-actions">
+                            <Link href="/login" className="landing-nav-link">Log in</Link>
+                            <Link href="/signup" className="landing-btn landing-btn--sm">Get Started</Link>
                         </div>
                     </div>
-                    <div className="landing-hero-visual">
-                        <div className="landing-phone-wrap" style={{ transform: `perspective(1200px) rotateY(-4deg) rotateX(${Math.min(scrollY * 0.02, 6)}deg)` }}>
-                            <Image
-                                src="/hero-phone.png"
-                                alt="Expanse app on phone"
-                                width={380}
-                                height={700}
-                                className="landing-phone-img"
-                                priority
-                            />
+                </nav>
+
+                {/* ─── HERO ─── */}
+                <section className="landing-hero">
+                    <div className="landing-hero-bg" />
+                    <div className="landing-hero-content">
+                        <div className="landing-hero-text">
+                            <div className="landing-badge">✨ Personal Finance, Reimagined</div>
+                            <h1 className="landing-h1">
+                                Take control of<br />
+                                <span className="landing-h1-accent">every penny.</span>
+                            </h1>
+                            <p className="landing-hero-sub">
+                                Expanse is the beautiful, privacy‑first expense tracker that helps you
+                                understand your spending, hit your goals, and build real wealth.
+                            </p>
+                            <div className="landing-hero-cta">
+                                <Link href="/signup" className="landing-btn landing-btn--lg">
+                                    Start Free →
+                                </Link>
+                                <Link href="/login" className="landing-btn landing-btn--ghost landing-btn--lg">
+                                    I have an account
+                                </Link>
+                            </div>
                         </div>
-                        <FloatingElements />
+                        <div className="landing-hero-visual">
+                            <div className="landing-phone-wrap" style={{ transform: `perspective(1200px) rotateY(-4deg) rotateX(${Math.min(scrollY * 0.02, 6)}deg)` }}>
+                                <Image
+                                    src="/hero-phone.png"
+                                    alt="Expanse app on phone"
+                                    width={380}
+                                    height={700}
+                                    className="landing-phone-img"
+                                    priority
+                                />
+                            </div>
+                            <FloatingElements />
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            {/* ─── MARQUEE RIBBON ─── */}
-            <section className="landing-ribbon-section">
-                <MarqueeRibbon items={marqueeItems} />
-                <MarqueeRibbon items={marqueeItems} reverse />
-            </section>
+                {/* ─── MARQUEE RIBBON ─── */}
+                <section className="landing-ribbon-section">
+                    <MarqueeRibbon items={marqueeItems} />
+                    <MarqueeRibbon items={marqueeItems} reverse />
+                </section>
 
-            {/* ─── STATS ─── */}
-            <section className="landing-stats-section">
-                <StatPill value="100%" label="Free & Open" />
-                <StatPill value="∞" label="Transactions" />
-                <StatPill value="30+" label="Currencies" />
-                <StatPill value="0" label="Ads Ever" />
-            </section>
+                {/* ─── STATS ─── */}
+                <section className="landing-stats-section">
+                    <StatPill value="100%" label="Free & Open" />
+                    <StatPill value="∞" label="Transactions" />
+                    <StatPill value="30+" label="Currencies" />
+                    <StatPill value="0" label="Ads Ever" />
+                </section>
 
-            {/* ─── FEATURES ─── */}
-            <section className="landing-features-section">
-                <div className="landing-section-header">
-                    <span className="landing-section-tag">Features</span>
-                    <h2 className="landing-h2">Everything you need,<br />nothing you don&apos;t.</h2>
-                    <p className="landing-section-sub">No bloated subscriptions. Just the tools that matter.</p>
-                </div>
-                <div className="landing-features-grid">
-                    {features.map((f, i) => (
-                        <FeatureCard key={i} {...f} />
-                    ))}
-                </div>
-            </section>
-
-            {/* ─── CTA ─── */}
-            <section className="landing-cta-section">
-                <div className="landing-cta-card">
-                    <h2 className="landing-cta-title">Ready to master your money?</h2>
-                    <p className="landing-cta-sub">Join Expanse today — it&apos;s completely free. No credit card needed.</p>
-                    <Link href="/signup" className="landing-btn landing-btn--lg landing-btn--white">Create Free Account →</Link>
-                </div>
-            </section>
-
-            {/* ─── FOOTER ─── */}
-            <footer className="landing-footer">
-                <div className="landing-footer-inner">
-                    <div className="landing-footer-brand">
-                        <span className="landing-logo-dot" />
-                        <span className="landing-footer-name">Expanse</span>
+                {/* ─── FEATURES ─── */}
+                <section className="landing-features-section">
+                    <div className="landing-section-header">
+                        <span className="landing-section-tag">Features</span>
+                        <h2 className="landing-h2">Everything you need,<br />nothing you don&apos;t.</h2>
+                        <p className="landing-section-sub">No bloated subscriptions. Just the tools that matter.</p>
                     </div>
-                    <p className="landing-footer-copy">© 2026 Expanse. Built with love.</p>
-                </div>
-            </footer>
-        </div>
+                    <div className="landing-features-grid">
+                        {features.map((f, i) => (
+                            <FeatureCard key={i} index={i} {...f} />
+                        ))}
+                    </div>
+                </section>
+
+                {/* ─── CTA ─── */}
+                <section className="landing-cta-section">
+                    <div className="landing-cta-card">
+                        <h2 className="landing-cta-title">Ready to master your money?</h2>
+                        <p className="landing-cta-sub">Join Expanse today — it&apos;s completely free. No credit card needed.</p>
+                        <Link href="/signup" className="landing-btn landing-btn--lg landing-btn--white">Create Free Account →</Link>
+                    </div>
+                </section>
+
+                {/* ─── FOOTER ─── */}
+                <footer className="landing-footer">
+                    <div className="landing-footer-inner">
+                        <div className="landing-footer-brand">
+                            <span className="landing-logo-dot" />
+                            <span className="landing-footer-name">Expanse</span>
+                        </div>
+                        <p className="landing-footer-copy">© 2026 Expanse. Built with love.</p>
+                    </div>
+                </footer>
+            </div>
+        </SmoothScrollProvider>
     );
 }

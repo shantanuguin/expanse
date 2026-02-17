@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 /* ── Browser Speech API type shims ── */
 interface SpeechRecognitionEvent {
@@ -53,8 +53,15 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
     const [interimTranscript, setInterimTranscript] = useState("");
     const [confidence, setConfidence] = useState(0);
     const [error, setError] = useState<string | null>(null);
-    const [isSupported, setIsSupported] = useState(true);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+    const isSupported = useMemo(() => {
+        if (typeof window === "undefined") return true; // SSR: assume supported
+        return !!(
+            (window as unknown as { SpeechRecognition: unknown }).SpeechRecognition ||
+            (window as unknown as { webkitSpeechRecognition: unknown }).webkitSpeechRecognition
+        );
+    }, []);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -63,11 +70,7 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
             (window as unknown as { SpeechRecognition: new () => SpeechRecognition }).SpeechRecognition ||
             (window as unknown as { webkitSpeechRecognition: new () => SpeechRecognition }).webkitSpeechRecognition;
 
-        if (!SR) {
-            setIsSupported(false);
-            setError("Browser does not support Speech Recognition.");
-            return;
-        }
+        if (!SR) return;
 
         const recognition = new SR();
         recognition.continuous = true;

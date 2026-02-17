@@ -47,7 +47,7 @@ export function DebtList() {
     };
 
     const DebtItem = ({ debt }: { debt: Debt }) => (
-        <div className="flex items-center justify-between p-4 border rounded-lg bg-card mb-2 shadow-sm">
+        <div className="flex items-center justify-between p-4 border rounded-2xl bg-card mb-2 shadow-sm card-hover">
             <div className="flex items-center gap-4">
                 <div className={`p-2 rounded-full ${debt.type === 'lent' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
                     {debt.type === 'lent' ? <ArrowUpRight className="h-5 w-5" /> : <ArrowDownLeft className="h-5 w-5" />}
@@ -88,7 +88,7 @@ export function DebtList() {
     return (
         <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
-                <Card>
+                <Card className="rounded-2xl">
                     <CardHeader>
                         <CardTitle className="text-green-600">Owed to You</CardTitle>
                     </CardHeader>
@@ -100,7 +100,7 @@ export function DebtList() {
                         )}
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="rounded-2xl">
                     <CardHeader>
                         <CardTitle className="text-red-600">You Owe</CardTitle>
                     </CardHeader>

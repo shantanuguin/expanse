@@ -45,7 +45,7 @@ export default function BudgetsPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Budgets</h1>
+                    <h1 className="text-3xl font-bold tracking-tight font-heading">Budgets</h1>
                     <p className="text-muted-foreground">Manage your spending limits.</p>
                 </div>
                 <Dialog open={openDia} onOpenChange={setOpenDia}>
@@ -78,7 +78,7 @@ export default function BudgetsPage() {
                     const isOver = spent > limit;
 
                     return (
-                        <Card key={budget.id} className={isOver ? "border-destructive" : ""}>
+                        <Card key={budget.id} className={`rounded-2xl card-hover ${isOver ? "border-destructive" : ""}`}>
                             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                                 <CardTitle className="text-sm font-medium">
                                     {category?.name || "Unknown Category"}

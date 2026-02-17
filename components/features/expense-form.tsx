@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
     CalendarIcon, Mic, MicOff, Pencil, Check, RotateCcw,
-    X, Plus, ArrowRight, Keyboard
+    ArrowRight, Keyboard
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -285,7 +285,6 @@ function VoiceMode({
     parsed: ParsedExpense | null;
     isSupported: boolean;
     error: string | null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     categories: Category[];
     accounts: Account[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -390,7 +389,6 @@ function VoiceMode({
                             confidence="high"
                             isEditing={editingField === "type"}
                             onStartEdit={() => setEditingField("type")}
-                            onStopEdit={() => setEditingField(null)}
                             editContent={
                                 <div className="flex gap-2 w-full">
                                     <Button
@@ -414,7 +412,6 @@ function VoiceMode({
                             confidence={parsed.confidence.amount}
                             isEditing={editingField === "amount"}
                             onStartEdit={() => setEditingField("amount")}
-                            onStopEdit={() => setEditingField(null)}
                             editContent={
                                 <div className="flex gap-2 w-full">
                                     <Input
@@ -447,7 +444,6 @@ function VoiceMode({
                             confidence={parsed.confidence.description}
                             isEditing={editingField === "description"}
                             onStartEdit={() => setEditingField("description")}
-                            onStopEdit={() => setEditingField(null)}
                             editContent={
                                 <div className="flex gap-2 w-full">
                                     <Input
@@ -473,7 +469,6 @@ function VoiceMode({
                             confidence={parsed.confidence.category}
                             isEditing={editingField === "category"}
                             onStartEdit={() => setEditingField("category")}
-                            onStopEdit={() => setEditingField(null)}
                             editContent={
                                 <div className="flex gap-2 w-full items-center">
                                     <Select
@@ -501,7 +496,6 @@ function VoiceMode({
                             confidence="none"
                             isEditing={editingField === "account"}
                             onStartEdit={() => setEditingField("account")}
-                            onStopEdit={() => setEditingField(null)}
                             editContent={
                                 <div className="flex gap-2 w-full items-center">
                                     <Select
@@ -529,7 +523,6 @@ function VoiceMode({
                             confidence={parsed.confidence.merchant}
                             isEditing={editingField === "merchant"}
                             onStartEdit={() => setEditingField("merchant")}
-                            onStopEdit={() => setEditingField(null)}
                             editContent={
                                 <div className="flex gap-2 w-full">
                                     <Input
@@ -552,7 +545,6 @@ function VoiceMode({
                             confidence={parsed.confidence.date}
                             isEditing={editingField === "date"}
                             onStartEdit={() => setEditingField("date")}
-                            onStopEdit={() => setEditingField(null)}
                             editContent={
                                 <div className="w-full">
                                     <Popover>
@@ -602,14 +594,13 @@ function VoiceMode({
 /* ── Summary Field (tappable row in the card) ── */
 function SummaryField({
     label, value, confidence, isEditing,
-    onStartEdit, onStopEdit, editContent,
+    onStartEdit, editContent,
 }: {
     label: string;
     value: string;
     confidence: FieldConfidence;
     isEditing: boolean;
     onStartEdit: () => void;
-    onStopEdit: () => void;
     editContent: React.ReactNode;
 }) {
     return (
@@ -645,7 +636,7 @@ function ManualMode({
     isSubmitting: boolean;
 }) {
     return (
-        <div className="space-y-5 p-4 md:p-6 bg-card rounded-xl border">
+        <div className="space-y-5 p-5 md:p-8 bg-card rounded-3xl border card-hover shadow-sm">
             {/* Type toggle */}
             <FormField
                 control={form.control}

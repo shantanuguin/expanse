@@ -75,7 +75,7 @@ export function GoalList() {
                 const isCompleted = current >= target;
 
                 return (
-                    <Card key={goal.id} className={isCompleted ? "border-green-500 bg-green-50/50 dark:bg-green-950/10" : ""}>
+                    <Card key={goal.id} className={`rounded-2xl card-hover ${isCompleted ? "border-green-500 bg-green-50/50 dark:bg-green-950/10" : ""}`}>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">
                                 {goal.name}
