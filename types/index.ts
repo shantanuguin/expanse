@@ -1,4 +1,4 @@
-export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'INR' | string;
+export type Currency = 'USD' | 'JOD' | 'INR';
 
 export interface Account {
     id: string;

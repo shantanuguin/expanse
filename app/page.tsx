@@ -225,7 +225,7 @@ export default function LandingPage() {
             <section className="landing-features-section">
                 <div className="landing-section-header">
                     <span className="landing-section-tag">Features</span>
-                    <h2 className="landing-h2">Everything you need,<br />nothing you don't.</h2>
+                    <h2 className="landing-h2">Everything you need,<br />nothing you don&apos;t.</h2>
                     <p className="landing-section-sub">No bloated subscriptions. Just the tools that matter.</p>
                 </div>
                 <div className="landing-features-grid">
@@ -239,7 +239,7 @@ export default function LandingPage() {
             <section className="landing-cta-section">
                 <div className="landing-cta-card">
                     <h2 className="landing-cta-title">Ready to master your money?</h2>
-                    <p className="landing-cta-sub">Join Expanse today — it's completely free. No credit card needed.</p>
+                    <p className="landing-cta-sub">Join Expanse today — it&apos;s completely free. No credit card needed.</p>
                     <Link href="/signup" className="landing-btn landing-btn--lg landing-btn--white">Create Free Account →</Link>
                 </div>
             </section>
