@@ -46,7 +46,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <aside className="hidden w-64 border-r bg-muted/40 md:block">
                 <div className="flex h-full max-h-screen flex-col gap-2">
                     <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-                        <Link href="/" className="flex items-center gap-2 font-semibold">
+                        <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
                             <span className="">Expense Tracker</span>
                         </Link>
                     </div>
@@ -76,7 +76,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
                 <header className="flex h-14 items-center justify-between gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
                     <div className="flex items-center gap-4">
-                        <Link href="/" className="md:hidden flex items-center gap-2 font-semibold">
+                        <Link href="/dashboard" className="md:hidden flex items-center gap-2 font-semibold">
                             <span>Expense Tracker</span>
                         </Link>
                     </div>

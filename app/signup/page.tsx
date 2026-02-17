@@ -23,7 +23,7 @@ export default function SignupPage() {
         try {
             await createUserWithEmailAndPassword(auth, email, password);
             toast.success("Account created successfully!");
-            router.push("/");
+            router.push("/dashboard");
         } catch (error) {
             const err = error as Error;
             toast.error(err.message || "Failed to create account");
