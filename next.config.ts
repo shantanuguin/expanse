@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true, // Required for static export
   },
+  turbopack: {},
 };
 
 export default withPWA(nextConfig);
