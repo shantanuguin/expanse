@@ -107,9 +107,7 @@ export function AccountForm({ onSuccess }: { onSuccess?: () => void }) {
                                     </FormControl>
                                     <SelectContent>
                                         <SelectItem value="USD">USD</SelectItem>
-                                        <SelectItem value="EUR">EUR</SelectItem>
-                                        <SelectItem value="GBP">GBP</SelectItem>
-                                        <SelectItem value="JPY">JPY</SelectItem>
+                                        <SelectItem value="JOD">JOD</SelectItem>
                                         <SelectItem value="INR">INR</SelectItem>
                                     </SelectContent>
                                 </Select>

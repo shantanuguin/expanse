@@ -3,7 +3,7 @@ import { z } from "zod";
 export const expenseSchema = z.object({
     type: z.enum(["income", "expense"]).default("expense"),
     amount: z.coerce.number().positive("Amount must be positive"),
-    currency: z.string().min(3, "Select a currency"),
+    currency: z.enum(['USD', 'JOD', 'INR']),
     description: z.string().min(1, "Description is required"),
     categoryId: z.string().min(1, "Select a category"),
     accountId: z.string().min(1, "Select an account"),

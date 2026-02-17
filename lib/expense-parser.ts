@@ -1,6 +1,8 @@
+import { Currency } from "@/types";
+
 export interface ParsedExpense {
     amount?: number;
-    currency?: string;
+    currency?: Currency;
     description?: string;
     merchant?: string;
     date?: Date;
@@ -10,11 +12,11 @@ export function parseExpenseText(text: string): ParsedExpense {
     const result: ParsedExpense = {};
 
     // 1. Extract Amount and Currency
-    // Look for patterns like "$25", "25 dollars", "25 EUR", "25"
+    // Look for patterns like "$25", "25 dollars", "25 JOD", "25"
     // Regex for amount: \d+(\.\d{1,2})?
-    // Regex for currency symbols: [$€£¥]
+    // Regex for currency symbols: [$€£¥] (keeping regex broad but logic strict)
 
-    const amountRegex = /(\$|€|£|¥)?\s?(\d+(\.\d{1,2})?)\s?(dollars|euros|pounds|cent|cents|usd|eur|gbp)?/i;
+    const amountRegex = /(\$|€|£|¥|₹|JD)?\s?(\d+(\.\d{1,2})?)\s?(dollars|euros|pounds|cent|cents|usd|jod|inr|rupees|dinars)?/i;
     const amountMatch = text.match(amountRegex);
 
     if (amountMatch) {
@@ -26,8 +28,8 @@ export function parseExpenseText(text: string): ParsedExpense {
         const word = amountMatch[4]?.toLowerCase();
 
         if (symbol === '$' || word === 'dollars' || word === 'usd') result.currency = 'USD';
-        else if (symbol === '€' || word === 'euros' || word === 'eur') result.currency = 'EUR';
-        else if (symbol === '£' || word === 'pounds' || word === 'gbp') result.currency = 'GBP';
+        else if (symbol === 'JD' || word === 'jod' || word === 'dinars') result.currency = 'JOD';
+        else if (symbol === '₹' || word === 'inr' || word === 'rupees') result.currency = 'INR';
         else result.currency = 'USD'; // Default
     }
 
