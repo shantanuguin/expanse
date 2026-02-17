@@ -299,7 +299,7 @@ export default function LandingPage() {
                     </div>
                     <div className="landing-features-grid">
                         {features.map((f, i) => (
-                            <FeatureCard key={i} index={i} {...f} />
+                            <FeatureCard key={i} {...f} />
                         ))}
                     </div>
                 </section>
