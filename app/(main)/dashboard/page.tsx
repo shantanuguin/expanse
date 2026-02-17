@@ -67,7 +67,7 @@ export default function DashboardPage() {
             <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
 
             {/* Summary Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Net Balance</CardTitle>
@@ -162,20 +162,20 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <div className="col-span-4">
+            <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
+                <div className="lg:col-span-4">
                     <MonthlyChart expenses={expenses} />
                 </div>
-                <div className="col-span-3">
+                <div className="lg:col-span-3">
                     <CategoryPieChart expenses={expenses.filter(e => e.type === 'expense' || !e.type)} categories={categories} />
                 </div>
             </div>
 
             {/* Recent Transactions & Quick Actions Grid */}
-            <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
+            <div className="grid gap-4 grid-cols-1 lg:grid-cols-3">
 
                 {/* Recent Transactions (Spans 2 columns on large screens) */}
-                <Card className="col-span-2">
+                <Card className="lg:col-span-2">
                     <CardHeader>
                         <CardTitle>Recent Transactions</CardTitle>
                         <CardDescription>
@@ -204,7 +204,7 @@ export default function DashboardPage() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="col-span-3">
+                <Card>
                     <CardHeader>
                         <CardTitle>Quick Actions</CardTitle>
                         <CardDescription>
