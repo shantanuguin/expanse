@@ -2,12 +2,12 @@
 
 import "@/app/voice-expense.css";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
     CalendarIcon, Mic, Pencil, Check, RotateCcw,
-    ArrowRight, Keyboard
+    ArrowRight, Keyboard, Download
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -27,13 +27,13 @@ import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 
 import { expenseSchema, ExpenseFormValues } from "@/schema/expense";
-import { addDocument, expensesCollection } from "@/lib/firestore-service";
+import { addDocument, expensesCollection, categoriesCollection } from "@/lib/firestore-service";
 import { useCollection } from "@/hooks/use-firestore";
 import { Account, Category } from "@/types";
 
-import { useMediaRecorder } from "@/hooks/use-media-recorder";
-import { processVoiceExpense } from "@/app/actions/voice-process";
 import { ParsedExpense, FieldConfidence } from "@/lib/expense-parser";
+import { parseExpenseText } from "@/lib/expense-parser-client";
+import { DEFAULT_CATEGORIES } from "@/lib/default-categories";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useCurrency } from "@/components/providers/currency-provider";
 import { Loader2 } from "lucide-react";
@@ -57,17 +57,31 @@ export function ExpenseForm() {
     const [transcript, setTranscript] = useState<string>("");
     const [editingField, setEditingField] = useState<string | null>(null);
 
-    const [isProcessing, setIsProcessing] = useState(false);
-
-    const { data: categories } = useCollection<Category>("categories", user?.uid);
+    const { data: categories, loading: categoriesLoading } = useCollection<Category>("categories", user?.uid);
     const { data: accounts } = useCollection<Account>("accounts", user?.uid);
 
-    const {
-        isRecording, startRecording, stopRecording, error: recorderError
-    } = useMediaRecorder();
+    // ── Web Speech API State ──
+    const [isRecording, setIsRecording] = useState(false);
+    const [recorderError, setRecorderError] = useState<string | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognitionRef = useRef<any>(null);
 
-    // Combined error state
-    const error = recorderError;
+    // Initialize Speech Recognition
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                const recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = true;
+                recognition.lang = "en-US";
+                recognitionRef.current = recognition;
+            } else {
+                setRecorderError("Voice input not supported in this browser.");
+            }
+        }
+    }, []);
 
     const form = useForm<ExpenseFormValues>({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,76 +100,129 @@ export function ExpenseForm() {
         },
     });
 
+    // ── Seed Categories ──
+    const handleSeedCategories = async () => {
+        if (!user) return;
+        setIsSubmitting(true);
+        try {
+            for (const cat of DEFAULT_CATEGORIES) {
+                await addDocument(categoriesCollection, cat, user.uid);
+            }
+            toast.success("Default categories added!");
+        } catch (error) {
+            console.error("Failed to seed categories", error);
+            toast.error("Failed to add categories.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const stopListening = useCallback(() => {
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            setIsRecording(false);
+        }
+    }, []);
+
+    const handleStopListening = useCallback((finalText: string) => {
+        stopListening();
+        if (!finalText) {
+             setVoicePhase("idle");
+             return;
+        }
+
+        // Process locally
+        const result = parseExpenseText(finalText, categories);
+
+        setParsed(result);
+        setVoicePhase("review");
+
+        // Fill form
+        if (result.type) form.setValue("type", result.type);
+        if (result.amount) form.setValue("amount", result.amount);
+        if (result.currency) form.setValue("currency", result.currency);
+        if (result.description) form.setValue("description", result.description);
+        if (result.merchant) form.setValue("merchant", result.merchant);
+        if (result.date) form.setValue("date", new Date(result.date));
+
+        // Try to find category ID
+        const cat = categories.find(c => c.name.toLowerCase() === result.categoryName?.toLowerCase());
+        if (cat) form.setValue("categoryId", cat.id);
+
+    }, [categories, form, stopListening]);
+
     /* ── Handlers ── */
-    const handleOrbTap = useCallback(async () => {
-        if (isRecording) {
-            // Stop and Process
-            const audioBlob = await stopRecording();
-            if (audioBlob) {
-                setIsProcessing(true);
-                setVoicePhase("idle"); // or 'processing' if we want a specific phase
+    const startListening = useCallback(() => {
+        if (!recognitionRef.current) {
+            toast.error("Speech recognition not supported.");
+            return;
+        }
+        setRecorderError(null);
+        setTranscript("");
+        setIsRecording(true);
+        setVoicePhase("listening");
 
-                try {
-                    const formData = new FormData();
-                    formData.append("audio", audioBlob, "recording.webm");
+        recognitionRef.current.start();
 
-                    const result = await processVoiceExpense(formData);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        recognitionRef.current.onresult = (event: any) => {
+            let finalTranscript = "";
+            let interimTranscript = "";
 
-                    if (result.success && result.data) {
-                        setParsed({
-                            ...result.data,
-                            // Adapt to client-side type if needed. 
-                            // expense-parser ParsedExpense had specific confidence field structure.
-                            // We will map it.
-                            confidence: {
-                                amount: "high",
-                                currency: "high",
-                                date: "high",
-                                merchant: "high",
-                                category: "high",
-                                description: "high",
-                            },
-                            // Map category name to ID if possible
-                            categoryId: categories.find(c => c.name.toLowerCase() === result.data?.category.toLowerCase())?.id,
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            currency: (result.data.currency as any) || currency,
-                            date: new Date(result.data.date),
-                        });
-                        setVoicePhase("review");
-
-                        // Fill form
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        if (result.data.type) form.setValue("type", result.data.type as any);
-                        if (result.data.amount) form.setValue("amount", result.data.amount);
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        if (result.data.currency) form.setValue("currency", result.data.currency as any);
-                        if (result.data.description) form.setValue("description", result.data.description);
-                        if (result.data.merchant) form.setValue("merchant", result.data.merchant);
-                        if (result.data.date) form.setValue("date", new Date(result.data.date));
-
-                        // Try to find category ID
-                        const cat = categories.find(c => c.name.toLowerCase() === result.data?.category.toLowerCase());
-                        if (cat) form.setValue("categoryId", cat.id);
-                    } else {
-                        toast.error(result.error || "Failed to process audio.");
-                        setVoicePhase("idle");
-                    }
-                } catch (err) {
-                    toast.error("An error occurred during processing.");
-                    console.error(err);
-                    setVoicePhase("idle");
-                } finally {
-                    setIsProcessing(false);
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
                 }
             }
+            const currentText = finalTranscript || interimTranscript;
+            setTranscript(currentText);
+
+            if (finalTranscript) {
+                handleStopListening(finalTranscript);
+            }
+        };
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        recognitionRef.current.onerror = (event: any) => {
+            console.error("Speech recognition error", event.error);
+            if (event.error === "no-speech") {
+                 setRecorderError("No speech detected. Try again.");
+            } else {
+                 setRecorderError("Microphone error: " + event.error);
+            }
+            setIsRecording(false);
+            setVoicePhase("idle");
+        };
+
+        recognitionRef.current.onend = () => {
+             // If stopped manually, isRecording might be false already.
+             // If stopped automatically by silence, we might want to process what we have.
+             // But usually onresult handles final transcript.
+             if (isRecording) {
+                 setIsRecording(false);
+             }
+        };
+
+    }, [isRecording, handleStopListening]);
+
+    const handleOrbTap = useCallback(() => {
+        if (isRecording) {
+            stopListening();
+            // If we stop manually, we might want to take whatever transcript we have
+            if (transcript) {
+                handleStopListening(transcript);
+            } else {
+                setVoicePhase("idle");
+            }
         } else {
-            // Start
             setParsed(null);
             form.reset();
-            setVoicePhase("listening");
-            await startRecording();
+            startListening();
         }
-    }, [isRecording, stopRecording, startRecording, categories, form, currency]);
+    }, [isRecording, stopListening, transcript, form, startListening, handleStopListening]);
+
 
     /* ── Handlers ── */
     const handleTryAgain = useCallback(() => {
@@ -163,21 +230,20 @@ export function ExpenseForm() {
         setTranscript("");
         form.reset();
         setVoicePhase("idle");
-        setTimeout(async () => {
-            setVoicePhase("listening");
-            await startRecording();
+        setTimeout(() => {
+            startListening();
         }, 300);
-    }, [form, startRecording]);
+    }, [form, startListening]);
 
     const handleSwitchMode = useCallback((newMode: AppMode) => {
-        if (isRecording) stopRecording();
+        if (isRecording) stopListening();
         setMode(newMode);
         if (newMode === "voice") {
             setVoicePhase("idle");
             setParsed(null);
             setTranscript("");
         }
-    }, [isRecording, stopRecording]);
+    }, [isRecording, stopListening]);
 
     async function onSubmit(data: ExpenseFormValues) {
         if (!user) {
@@ -219,6 +285,26 @@ export function ExpenseForm() {
         }
     }
 
+    // ── Check for empty categories ──
+    if (!categoriesLoading && categories.length === 0) {
+        return (
+             <div className="max-w-lg mx-auto py-10 text-center space-y-4">
+                 <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-2xl border border-yellow-200 dark:border-yellow-800">
+                     <p className="text-yellow-800 dark:text-yellow-200 font-medium">
+                         You don&apos;t have any categories yet.
+                     </p>
+                     <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                         Add default categories to start tracking your expenses.
+                     </p>
+                 </div>
+                 <Button onClick={handleSeedCategories} disabled={isSubmitting}>
+                     {isSubmitting ? <Loader2 className="animate-spin mr-2" /> : <Download className="mr-2 h-4 w-4" />}
+                     Add Default Categories
+                 </Button>
+             </div>
+        );
+    }
+
     /* ────────────────────────────────────────────
        Render
        ──────────────────────────────────────────── */
@@ -258,10 +344,9 @@ export function ExpenseForm() {
                                 <VoiceMode
                                     voicePhase={voicePhase}
                                     isRecording={isRecording}
-                                    isProcessing={isProcessing}
                                     parsed={parsed}
                                     transcript={transcript}
-                                    error={error}
+                                    error={recorderError}
                                     categories={categories}
                                     accounts={accounts}
                                     form={form}
@@ -299,14 +384,13 @@ export function ExpenseForm() {
    VOICE MODE
    ════════════════════════════════════════════════════════ */
 function VoiceMode({
-    voicePhase, isRecording, isProcessing,
+    voicePhase, isRecording,
     parsed, transcript, error,
     categories, accounts, form, editingField, setEditingField,
     isSubmitting, onOrbTap, onTryAgain,
 }: {
     voicePhase: VoicePhase;
     isRecording: boolean;
-    isProcessing: boolean;
     parsed: ParsedExpense | null;
     transcript: string;
     error: string | null;
@@ -327,13 +411,10 @@ function VoiceMode({
                 <div className="voice-orb-wrapper">
                     <button
                         type="button"
-                        className={cn("voice-orb", isRecording && "listening", isProcessing && "processing")}
+                        className={cn("voice-orb", isRecording && "listening")}
                         onClick={onOrbTap}
-                        disabled={isProcessing}
                     >
-                        {isProcessing ? (
-                            <Loader2 className="h-10 w-10 animate-spin text-white" />
-                        ) : isRecording ? (
+                        {isRecording ? (
                             <div className="waveform">
                                 <div className="waveform-bar" />
                                 <div className="waveform-bar" />
@@ -348,16 +429,19 @@ function VoiceMode({
 
                     {/* Status Text */}
                     <div className="voice-transcript-area">
-                        {isProcessing ? (
-                            <span className="voice-transcript-interim animate-pulse">Processing audio...</span>
-                        ) : isRecording ? (
-                            <span className="voice-transcript-interim">Listening... Tap to stop</span>
+                         {isRecording ? (
+                            <>
+                                <span className="voice-transcript-interim">Listening... Tap to stop</span>
+                                <p className="text-xs text-muted-foreground mt-2 max-w-xs mx-auto italic">
+                                    &quot;{transcript || "..."}&quot;
+                                </p>
+                            </>
                         ) : (
                             <span className="text-muted-foreground text-sm">Tap microphone to start</span>
                         )}
                     </div>
 
-                    {!isRecording && !isProcessing && (
+                    {!isRecording && (
                         <p className="voice-hint">
                             Say something like &quot;Spent 25 dollars on pizza at Dominos yesterday&quot;
                         </p>
@@ -861,53 +945,54 @@ function ManualMode({
 }
 
 /* ── Per-field microphone button ── */
-/* ── Per-field microphone button ── */
 function FieldMic({ onResult }: { onResult: (text: string) => void }) {
-    const { isRecording, startRecording, stopRecording } = useMediaRecorder();
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [isListening, setIsListening] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognitionRef = useRef<any>(null);
 
-    const handleToggle = async (e: React.MouseEvent) => {
+    const handleToggle = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
 
-        if (isProcessing) return;
-
-        if (isRecording) {
-            const blob = await stopRecording();
-            if (blob) {
-                setIsProcessing(true);
-                try {
-                    const formData = new FormData();
-                    formData.append("audio", blob, "field.webm");
-                    const res = await processVoiceExpense(formData);
-                    if (res.success && res.text) {
-                        onResult(res.text);
-                    } else {
-                        toast.error("Could not recognize speech");
-                    }
-                } catch (err) {
-                    console.error(err);
-                } finally {
-                    setIsProcessing(false);
-                }
-            }
-        } else {
-            await startRecording();
+        if (isListening) {
+             recognitionRef.current?.stop();
+             setIsListening(false);
+             return;
         }
+
+        // Init
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            toast.error("Voice input not supported.");
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = "en-US";
+
+        recognition.onstart = () => setIsListening(true);
+        recognition.onend = () => setIsListening(false);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        recognition.onresult = (event: any) => {
+            const text = event.results[0][0].transcript;
+            if (text) onResult(text);
+        };
+
+        recognition.start();
+        recognitionRef.current = recognition;
     };
 
     return (
         <button
             type="button"
-            className={cn("field-mic-btn", isRecording && "active", isProcessing && "opacity-50")}
+            className={cn("field-mic-btn", isListening && "active listening-pulse")}
             onClick={handleToggle}
-            title={isRecording ? "Stop" : "Voice input"}
+            title={isListening ? "Stop" : "Voice input"}
         >
-            {isProcessing ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-                <Mic className="h-3.5 w-3.5" />
-            )}
+            <Mic className="h-3.5 w-3.5" />
         </button>
     );
 }

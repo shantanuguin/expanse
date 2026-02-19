@@ -1,56 +1,133 @@
 "use client";
 
-import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { navLinks } from "./nav-links";
+import { MoreHorizontal, X } from "lucide-react";
 import { useState } from "react";
-import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import { mobilePrimaryItems, mobileMoreItems } from "./nav-items";
 
 export function MobileNav() {
     const pathname = usePathname();
-    const [open, setOpen] = useState(false);
+    const [moreOpen, setMoreOpen] = useState(false);
+
+    const isMoreActive = mobileMoreItems.some((item) => pathname === item.href);
 
     return (
-        <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden shrink-0">
-                    <Menu className="h-5 w-5" />
-                    <span className="sr-only">Toggle navigation menu</span>
-                </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="flex flex-col p-0 w-64">
-                <VisuallyHidden.Root>
-                    <SheetTitle>Menu</SheetTitle>
-                    <SheetDescription>Navigation Menu</SheetDescription>
-                </VisuallyHidden.Root>
-                <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-                    <Link href="/" className="flex items-center gap-2 font-semibold" onClick={() => setOpen(false)}>
-                        <span>Expanse</span>
-                    </Link>
+        <>
+            {/* ─── Mobile "More" Drawer ─── */}
+            {moreOpen && (
+                <div className="fixed inset-0 z-[60] md:hidden" onClick={() => setMoreOpen(false)}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <div
+                        className="absolute bottom-20 left-4 right-4 bg-background border rounded-3xl shadow-2xl p-3 animate-in slide-in-from-bottom-4 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-4 py-2.5 border-b mb-2">
+                            <span className="text-sm font-heading">More</span>
+                            <button onClick={() => setMoreOpen(false)} className="p-1.5 rounded-full hover:bg-muted">
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5 p-1">
+                            {mobileMoreItems.map((item) => {
+                                const isActive = pathname === item.href;
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        onClick={() => setMoreOpen(false)}
+                                        className={cn(
+                                            "flex flex-col items-center gap-2 py-4 px-2 rounded-2xl transition-colors",
+                                            isActive
+                                                ? "bg-primary/10 text-primary"
+                                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        )}
+                                    >
+                                        <item.icon className={cn("h-5 w-5", isActive && "text-primary")} />
+                                        <span className={cn(
+                                            "text-[11px] leading-tight",
+                                            isActive ? "font-semibold" : "font-medium"
+                                        )}>
+                                            {item.label}
+                                        </span>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
-                <nav className="grid gap-1 px-2 text-lg font-medium lg:px-4 py-4">
-                    {navLinks.map((link) => (
-                        <Link
-                            key={link.href}
-                            href={link.href}
-                            onClick={() => setOpen(false)}
-                            className={cn(
-                                "flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-primary",
-                                link.href === pathname
-                                    ? "bg-muted text-primary"
-                                    : "text-muted-foreground"
-                            )}
-                        >
-                            <link.icon className="h-5 w-5" />
-                            {link.title}
-                        </Link>
-                    ))}
-                </nav>
-            </SheetContent>
-        </Sheet>
+            )}
+
+            {/* ─── Mobile Bottom Nav ─── */}
+            <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-xl md:hidden safe-area-bottom">
+                <div className="flex items-end h-[72px] px-2">
+                    {mobilePrimaryItems.map((item) => {
+                        const isActive = pathname === item.href;
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const isSpecial = "special" in item && (item as any).special;
+
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={cn(
+                                    "flex flex-col items-center justify-center gap-1 py-2.5 relative flex-1 transition-colors",
+                                    isSpecial && "flex-none w-16",
+                                    isActive && !isSpecial
+                                        ? "text-primary"
+                                        : !isSpecial ? "text-muted-foreground" : ""
+                                )}
+                            >
+                                {isSpecial ? (
+                                    <div className="flex items-center justify-center w-13 h-13 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 -mt-5">
+                                        <item.icon className="h-6 w-6" />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <item.icon className={cn("h-[22px] w-[22px]", isActive && "text-primary")} />
+                                        <span className={cn(
+                                            "text-[10px] leading-tight",
+                                            isActive ? "font-bold text-primary" : "font-medium"
+                                        )}>
+                                            {item.label}
+                                        </span>
+                                        {isActive && (
+                                            <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[3px] rounded-full bg-primary" />
+                                        )}
+                                    </>
+                                )}
+                            </Link>
+                        );
+                    })}
+
+                    {/* "More" button */}
+                    <button
+                        type="button"
+                        onClick={() => setMoreOpen(!moreOpen)}
+                        className={cn(
+                            "flex flex-col items-center justify-center gap-1 py-2.5 flex-1 transition-colors",
+                            isMoreActive || moreOpen
+                                ? "text-primary"
+                                : "text-muted-foreground"
+                        )}
+                    >
+                        <MoreHorizontal className={cn(
+                            "h-[22px] w-[22px]",
+                            (isMoreActive || moreOpen) && "text-primary"
+                        )} />
+                        <span className={cn(
+                            "text-[10px] leading-tight",
+                            isMoreActive || moreOpen ? "font-bold text-primary" : "font-medium"
+                        )}>
+                            More
+                        </span>
+                        {isMoreActive && (
+                            <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[3px] rounded-full bg-primary" />
+                        )}
+                    </button>
+                </div>
+            </nav>
+        </>
     );
 }

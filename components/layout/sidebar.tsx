@@ -3,43 +3,43 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
-import { navLinks } from "./nav-links";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { allNavItems } from "./nav-items";
 
 export function Sidebar() {
     const pathname = usePathname();
 
     return (
-        <div className="hidden border-r bg-background md:block w-64 flex-col h-screen sticky top-0">
-            <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-                <Link href="/" className="flex items-center gap-2 font-semibold">
-                    <span className="">Expanse</span>
-                </Link>
-            </div>
-            <ScrollArea className="flex-1">
-                <nav className="grid items-start px-2 text-sm font-medium lg:px-4 py-4 gap-1">
-                    {navLinks.map((link) => (
-                        <Link
-                            key={link.href}
-                            href={link.href}
-                            className={cn(
-                                buttonVariants({ variant: link.href === pathname ? "secondary" : "ghost", size: "sm" }),
-                                "justify-start gap-3 px-3",
-                                link.href === pathname && "bg-muted text-primary"
-                            )}
-                        >
-                            <link.icon className="h-4 w-4" />
-                            {link.title}
-                        </Link>
-                    ))}
-                </nav>
-            </ScrollArea>
-            <div className="mt-auto p-4 border-t">
-                <div className="text-xs text-muted-foreground">
-                    &copy; 2026 Expanse
+        <aside className="hidden w-64 border-r bg-muted/30 md:block">
+            <div className="flex h-full max-h-screen flex-col">
+                {/* Logo */}
+                <div className="flex h-16 items-center border-b px-6">
+                    <Link href="/dashboard" className="flex items-center gap-2.5 font-heading text-lg">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-primary" />
+                        Expanse
+                    </Link>
+                </div>
+
+                {/* Nav items */}
+                <div className="flex-1 overflow-y-auto py-4">
+                    <nav className="flex flex-col gap-1 px-3">
+                        {allNavItems.map((item) => (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={cn(
+                                    "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150",
+                                    pathname === item.href
+                                        ? "bg-primary/10 text-primary font-semibold"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                )}
+                            >
+                                <item.icon className={cn("h-[18px] w-[18px]", pathname === item.href && "text-primary")} />
+                                {item.label}
+                            </Link>
+                        ))}
+                    </nav>
                 </div>
             </div>
-        </div>
+        </aside>
     );
 }
