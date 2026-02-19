@@ -29,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { expenseSchema, ExpenseFormValues } from "@/schema/expense";
 import { addDocument, expensesCollection, categoriesCollection } from "@/lib/firestore-service";
 import { useCollection } from "@/hooks/use-firestore";
-import { Account, Category } from "@/types";
+import { Account, Category, Currency } from "@/types";
 
 import { ParsedExpense, FieldConfidence } from "@/lib/expense-parser";
 import { parseExpenseText } from "@/lib/expense-parser-client";
@@ -140,7 +140,7 @@ export function ExpenseForm() {
         // Fill form
         if (result.type) form.setValue("type", result.type);
         if (result.amount) form.setValue("amount", result.amount);
-        if (result.currency) form.setValue("currency", result.currency);
+        if (result.currency) form.setValue("currency", result.currency as Currency);
         if (result.description) form.setValue("description", result.description);
         if (result.merchant) form.setValue("merchant", result.merchant);
         if (result.date) form.setValue("date", new Date(result.date));

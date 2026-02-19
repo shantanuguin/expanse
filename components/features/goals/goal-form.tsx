@@ -57,7 +57,6 @@ export function GoalForm({ onSuccess }: { onSuccess?: () => void }) {
         try {
             await addDocument(goalsCollection, {
                 ...data,
-                updatedAt: new Date(),
             }, user.uid);
             form.reset();
             toast.success("Goal added successfully!");

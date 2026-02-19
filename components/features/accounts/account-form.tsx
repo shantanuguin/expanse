@@ -37,7 +37,6 @@ export function AccountForm({ onSuccess }: { onSuccess?: () => void }) {
         try {
             await addDocument(accountsCollection, {
                 ...data,
-                updatedAt: new Date(),
             }, user.uid);
 
             toast.success("Account created!");

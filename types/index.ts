@@ -20,6 +20,8 @@ export interface Category {
     icon?: string;
     isDefault?: boolean;
     userId: string;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
 export interface Split {

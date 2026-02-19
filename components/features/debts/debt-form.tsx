@@ -60,7 +60,6 @@ export function DebtForm({ onSuccess }: { onSuccess?: () => void }) {
             await addDocument(debtsCollection, {
                 ...data,
                 isPaid: false, // Default to unpaid on creation
-                updatedAt: new Date(),
             }, user.uid);
             form.reset();
             toast.success("Debt record added successfully!");

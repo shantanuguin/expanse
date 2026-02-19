@@ -95,7 +95,6 @@ export function RecurringForm({ existingRecurring, onSuccess }: RecurringFormPro
                     ...data,
                     currency: currency, // Use current display currency or provide selector?
                     nextDueDate: data.startDate, // Initial next due date is start date
-                    updatedAt: new Date(),
                 }, user.uid);
                 toast.success("Subscription created!");
             }

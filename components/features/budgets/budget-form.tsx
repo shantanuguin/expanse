@@ -76,7 +76,6 @@ export function BudgetForm({ existingBudget, onSuccess }: BudgetFormProps) {
                     currency: "USD", // Default for now, or fetch from user settings/context? 
                     // Ideally we store budget in base currency or user's preference. 
                     // Let's assume USD or user's Currency Context currency but for now hardcode or use simple number.
-                    updatedAt: new Date(),
                 }, user.uid);
                 toast.success("Budget set!");
             }

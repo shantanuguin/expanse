@@ -29,17 +29,26 @@ export const recurringExpensesCollection = createCollection<RecurringExpense>('r
 
 // Generic helper functions
 // T must include userId now
-export const addDocument = async <T extends { id: string, createdAt: unknown, userId: string }>(collectionRef: CollectionReference<T>, data: Omit<T, "id" | "createdAt" | "userId">, userId: string) => {
+// Relaxed constraint on T slightly to allow flexibility, but practically all our models fit.
+export const addDocument = async <T extends { id: string, userId: string }>(
+    collectionRef: CollectionReference<T>,
+    data: Omit<T, "id" | "createdAt" | "updatedAt" | "userId">,
+    userId: string
+) => {
     return await addDoc(collectionRef, {
         ...data,
         userId,
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
     } as unknown as T);
 };
 
 export const updateDocument = async <T>(collectionName: string, id: string, data: Partial<T>) => {
     const docRef = doc(db, collectionName, id);
-    await updateDoc(docRef, data as DocumentData);
+    await updateDoc(docRef, {
+        ...data,
+        updatedAt: serverTimestamp(),
+    } as DocumentData);
 };
 
 export const deleteDocument = async (collectionName: string, id: string) => {

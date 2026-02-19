@@ -34,10 +34,9 @@ export function DataTableRowActions<TData>({
                         // Restore logic
                         // We use a new ID for simplicity, or we could strict restore
                         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                        const { id, createdAt, ...dataToRestore } = expense;
+                        const { id, createdAt, updatedAt, ...dataToRestore } = expense;
                         await addDocument(expensesCollection, {
                             ...dataToRestore,
-                            updatedAt: new Date() // Set updated so we know it was restored/touched
                         }, expense.userId);
                         toast.success("Expense restored");
                     },
