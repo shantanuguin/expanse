@@ -15,6 +15,7 @@ import { CategoryPieChart } from "@/components/features/charts/category-pie-char
 import { useAuth } from "@/components/providers/auth-provider";
 import { useCurrency } from "@/components/providers/currency-provider";
 import { flattenExpenses } from "@/lib/utils";
+import { getDateFromFirestore } from "@/lib/date-utils";
 
 /* ── Animation Variants ── */
 const containerVariants = {
@@ -56,7 +57,7 @@ export default function DashboardPage() {
     const monthlyIncome = expenses
         .filter(e => e.type === 'income')
         .filter(exp => {
-            const d = (exp.date as unknown as { toDate: () => Date }).toDate ? (exp.date as unknown as { toDate: () => Date }).toDate() : new Date(exp.date);
+            const d = getDateFromFirestore(exp.date);
             return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         })
         .reduce((sum, exp) => sum + convert(exp.amount, exp.currency, currency), 0);
@@ -64,14 +65,14 @@ export default function DashboardPage() {
     const monthlyExpenses = expenses
         .filter(e => e.type === 'expense' || !e.type)
         .filter(exp => {
-            const d = (exp.date as unknown as { toDate: () => Date }).toDate ? (exp.date as unknown as { toDate: () => Date }).toDate() : new Date(exp.date);
+            const d = getDateFromFirestore(exp.date);
             return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         })
         .reduce((sum, exp) => sum + convert(exp.amount, exp.currency, currency), 0);
 
     const recentExpenses = [...expenses].sort((a, b) => {
-        const dateA = (a.date as unknown as { toDate: () => Date }).toDate ? (a.date as unknown as { toDate: () => Date }).toDate() : new Date(a.date);
-        const dateB = (b.date as unknown as { toDate: () => Date }).toDate ? (b.date as unknown as { toDate: () => Date }).toDate() : new Date(b.date);
+        const dateA = getDateFromFirestore(a.date);
+        const dateB = getDateFromFirestore(b.date);
         return dateB.getTime() - dateA.getTime();
     }).slice(0, 5);
 
@@ -96,7 +97,7 @@ export default function DashboardPage() {
                         </div>
                     </CardHeader>
                     <CardContent className="px-5 pb-5">
-                        <div className={`text-2xl font-bold font-heading ${netBalance >= 0 ? 'text-emerald-600' : 'text-[#F54142]'}`}>
+                        <div className={`text-2xl font-bold font-heading ${netBalance >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
                             {formatCurrency(netBalance)}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">Lifetime</p>
@@ -120,11 +121,11 @@ export default function DashboardPage() {
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-5 pt-5">
                         <CardTitle className="text-sm font-medium text-muted-foreground">Expenses</CardTitle>
                         <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/30">
-                            <CreditCard className="h-4 w-4 text-[#F54142]" />
+                            <CreditCard className="h-4 w-4 text-destructive" />
                         </div>
                     </CardHeader>
                     <CardContent className="px-5 pb-5">
-                        <div className="text-2xl font-bold font-heading text-[#F54142]">{formatCurrency(monthlyExpenses)}</div>
+                        <div className="text-2xl font-bold font-heading text-destructive">{formatCurrency(monthlyExpenses)}</div>
                         <p className="text-xs text-muted-foreground mt-1">This month</p>
                     </CardContent>
                 </Card>
@@ -159,7 +160,7 @@ export default function DashboardPage() {
                                     .filter(exp => (exp.type === 'expense' || !exp.type))
                                     .filter(exp => {
                                         if (exp.categoryId !== budget.categoryId) return false;
-                                        const d = (exp.date as unknown as { toDate: () => Date }).toDate ? (exp.date as unknown as { toDate: () => Date }).toDate() : new Date(exp.date);
+                                        const d = getDateFromFirestore(exp.date);
                                         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
                                     })
                                     .reduce((sum, exp) => sum + convert(exp.amount, exp.currency, currency), 0);
@@ -217,16 +218,16 @@ export default function DashboardPage() {
                                         <div className={`flex items-center justify-center w-9 h-9 rounded-full flex-shrink-0 ${expense.type === 'income' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
                                             {expense.type === 'income'
                                                 ? <TrendingUp className="h-4 w-4 text-emerald-600" />
-                                                : <CreditCard className="h-4 w-4 text-[#F54142]" />
+                                                : <CreditCard className="h-4 w-4 text-destructive" />
                                             }
                                         </div>
                                         <div className="space-y-0.5 flex-1 min-w-0">
                                             <p className="text-sm font-medium leading-none truncate">{expense.description}</p>
                                             <p className="text-xs text-muted-foreground">
-                                                {format((expense.date as unknown as { toDate: () => Date }).toDate ? (expense.date as unknown as { toDate: () => Date }).toDate() : new Date(expense.date), "MMM d, yyyy")}
+                                                {format(getDateFromFirestore(expense.date), "MMM d, yyyy")}
                                             </p>
                                         </div>
-                                        <div className={`font-semibold text-sm tabular-nums ${expense.type === 'income' ? 'text-emerald-600' : 'text-[#F54142]'}`}>
+                                        <div className={`font-semibold text-sm tabular-nums ${expense.type === 'income' ? 'text-emerald-600' : 'text-destructive'}`}>
                                             {expense.type === 'income' ? '+' : '-'}{expense.amount.toFixed(2)}
                                         </div>
                                     </div>
@@ -246,8 +247,8 @@ export default function DashboardPage() {
                     <CardContent className="px-6 pb-6 space-y-3">
                         <Link href="/add" className="block">
                             <Button variant="outline" className="w-full justify-start gap-3 h-12 rounded-xl btn-scale text-sm font-medium">
-                                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[#F54142]/10">
-                                    <Plus className="h-4 w-4 text-[#F54142]" />
+                                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10">
+                                    <Plus className="h-4 w-4 text-primary" />
                                 </div>
                                 Add Transaction
                             </Button>
